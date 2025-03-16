@@ -27,7 +27,9 @@ def check_in(cookies):
         "X-Requested-With": "XMLHttpRequest"
     }
     response_checkin = requests.post(check_in_url, headers=check_headers, verify=False)
-    print(response_checkin.text)
+    #打印utf8的返回值
+    print(response_checkin.content.decode('utf-8'))
+    # print(response_checkin.text)
 
 
 def login(user, password):
