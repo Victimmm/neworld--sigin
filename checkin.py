@@ -5,7 +5,9 @@
 """
 import requests
 import re
+import json
 import os
+
 
 def check_in(cookies):
     check_in_url = "https://neworld.cloud/user/checkin"
@@ -28,7 +30,7 @@ def check_in(cookies):
     }
     response_checkin = requests.post(check_in_url, headers=check_headers, verify=False)
     #打印utf8的返回值
-    print(response_checkin.content.decode('utf-8'))
+    print(json.loads(response_checkin.content.decode('utf-8'))['msg'])
     # print(response_checkin.text)
 
 
@@ -57,13 +59,13 @@ def login(user, password):
         'code': '',
         'email': user,
         'passwd': password,
-        'fingerprint': 'dc372f07a01dc0baa781b3796fc56d57'
+        'fingerprint': '28a6103abe67ae368d0be9b612fc72db'
     }
 
     response = requests.post(url, headers=headers, data=data, verify=False)
     # 将Set-Cookie头拆分为单个cookie条目
     entries = response.headers.get('Set-Cookie')
-    keys_to_extract = ["uid", "key", "email", "expire_in"]
+    keys_to_extract = ["uid", "key", "email", "expire_in", "ip", "ip_hash"]
 
     # 创建一个正则表达式模板，匹配每个目标键值对
     cookie_pattern = r'(?P<key>' + '|'.join(keys_to_extract) + r')=([^;]+)'
@@ -75,9 +77,12 @@ def login(user, password):
 
     return cookie_dict
 
+
+
 # 环境变量中读取数据，包含账号密码，和登陆页面测试
 user = os.environ["USERNAME"]
 password = os.environ["PASSWORD"]
+
 
 add_cookies = {"intercom-device-id-sh7mjuq3": "88077d2f-4636-4e2e-8317-c2be2ca5e4dc", "intercom-id-sh7mjuq3": "b559e5c3-1f87-4f32-92a4-ea64a84c82ef", "_pk_id.1.86b2": "9c41cc0eac5d13af.1684203936."}
 cookies = login(user, password)
