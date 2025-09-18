@@ -8,6 +8,13 @@ import re
 import json
 import os
 
+def mask_secret(secret: str, head: int = 3, tail: int = 6) -> str:
+    if not secret:
+        return ""
+    if len(secret) <= head + tail:
+        # 如果太短，就直接全部替换成 *
+        return "*" * len(secret)
+    return secret[:head] + "*" * (len(secret) - head - tail) + secret[-tail:]
 
 def check_in(cookies):
     check_in_url = "https://neworld.cloud/user/checkin"
@@ -82,7 +89,7 @@ def login(user, password):
 # 环境变量中读取数据，包含账号密码，和登陆页面测试
 user = os.environ["USERNAME"]
 password = os.environ["PASSWORD"]
-print("用户账号：" + user)
+print("用户账号：" + mask_secret(user))
 
 add_cookies = {"intercom-device-id-sh7mjuq3": "88077d2f-4636-4e2e-8317-c2be2ca5e4dc", "intercom-id-sh7mjuq3": "b559e5c3-1f87-4f32-92a4-ea64a84c82ef", "_pk_id.1.86b2": "9c41cc0eac5d13af.1684203936."}
 cookies = login(user, password)
