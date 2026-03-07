@@ -40,5 +40,7 @@ jobs:
          PASSWORD: ${{ secrets.PASSWORD }}
          USERNAME8344: ${{ secrets.USERNAME8344 }}
          PASSWORD8344: ${{ secrets.PASSWORD8344 }}
+         USERNAME1325: ${{ secrets.USERNAME1325 }}
+         PASSWORD1325: ${{ secrets.PASSWORD1325 }}
       run: |
         python checkin.py
