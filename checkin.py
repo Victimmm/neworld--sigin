@@ -84,27 +84,22 @@ def login(user, password):
 
     return cookie_dict
 
+def process_account(username_env: str, password_env: str, add_cookies: dict):
+    # 从环境变量读取账号密码
+    user = os.environ[username_env]
+    password = os.environ[password_env]
 
+    print("用户账号：" + mask_secret(user))
 
-# 环境变量中读取数据，包含账号密码，和登陆页面测试
-user = os.environ["USERNAME"]
-password = os.environ["PASSWORD"]
-print("用户账号：" + mask_secret(user))
+    # 登录并补充 cookies
+    cookies = login(user, password)
+    cookies.update(add_cookies)
 
-add_cookies = {"intercom-device-id-sh7mjuq3": "88077d2f-4636-4e2e-8317-c2be2ca5e4dc", "intercom-id-sh7mjuq3": "b559e5c3-1f87-4f32-92a4-ea64a84c82ef", "_pk_id.1.86b2": "9c41cc0eac5d13af.1684203936."}
-cookies = login(user, password)
-cookies.update(add_cookies)
-result = "; ".join([f"{key}={value}" for key, value in cookies.items()])
-check_in(result)
-
-
-# 环境变量中读取数据，包含账号密码，和登陆页面测试
-user = os.environ["USERNAME8344"]
-password = os.environ["PASSWORD8344"]
-print("用户账号：" + mask_secret(user))
+    # 转成 check_in 需要的字符串格式
+    result = "; ".join([f"{key}={value}" for key, value in cookies.items()])
+    check_in(result)
 
 add_cookies = {"intercom-device-id-sh7mjuq3": "88077d2f-4636-4e2e-8317-c2be2ca5e4dc", "intercom-id-sh7mjuq3": "b559e5c3-1f87-4f32-92a4-ea64a84c82ef", "_pk_id.1.86b2": "9c41cc0eac5d13af.1684203936."}
-cookies = login(user, password)
-cookies.update(add_cookies)
-result = "; ".join([f"{key}={value}" for key, value in cookies.items()])
-check_in(result)
+process_account("USERNAME", "PASSWORD", add_cookies)
+process_account("USERNAME8344", "PASSWORD8344", add_cookies)
+
