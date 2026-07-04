@@ -1,106 +1,159 @@
 """
 @File : checkin.py
-@Author : Liaoweiming
-@Date : 2024/6/1 0:20
+@Author : WorkBuddy
+@Date : 2026/7/4
+@Description : 新界梯子每日自动签到脚本（适配新版 JSON API + 动态指纹）
 """
 import requests
-import re
-import json
 import os
+import hashlib
+import uuid
+import warnings
+warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+
 
 def mask_secret(secret: str, head: int = 3, tail: int = 6) -> str:
+    """脱敏显示账号"""
     if not secret:
         return ""
     if len(secret) <= head + tail:
-        # 如果太短，就直接全部替换成 *
         return "*" * len(secret)
     return secret[:head] + "*" * (len(secret) - head - tail) + secret[-tail:]
 
-def check_in(cookies):
-    check_in_url = "https://neworld.cloud/user/checkin"
-    check_headers = {
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-        "Content-Length": "0",
-        "Cookie": cookies,
-        "Origin": "https://neworld.cloud",
-        "Priority": "u=1, i",
-        "Sec-Ch-Ua": "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"",
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": "\"Windows\"",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "X-Requested-With": "XMLHttpRequest"
-    }
-    response_checkin = requests.post(check_in_url, headers=check_headers, verify=False)
-    #打印utf8的返回值
-    print(json.loads(response_checkin.content.decode('utf-8'))['msg'])
-    # print(response_checkin.text)
+
+def generate_fingerprint(seed: str = "") -> str:
+    """
+    生成类似 FingerprintJS v3 的 visitorId。
+    FingerprintJS 在新版登录页面中已改为动态生成，不再使用硬编码值。
+    此函数基于用户名生成稳定的 32 位 hex 指纹，保证每次签到的指纹一致。
+    """
+    if seed:
+        return hashlib.md5(seed.encode()).hexdigest()
+    return uuid.uuid4().hex
 
 
-def login(user, password):
-    url = 'https://neworld.cloud/auth/login'
+def try_login(session, base_url: str, email: str, password: str) -> bool:
+    """
+    登录新界。
+    新版登录接口使用 JSON 格式，并需要 fingerprint 字段。
+    使用 requests.Session 自动管理登录后的 cookies。
+    """
+    url = f"{base_url}/auth/login"
+
+    fingerprint = generate_fingerprint(email)
+
     headers = {
         'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Accept-Language': 'zh-CN,zh;q=0.9',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Cookie': '_pk_id.1.86b2=9c41cc0eac5d13af.1684203936.; intercom-id-sh7mjuq3=b559e5c3-1f87-4f32-92a4-ea64a84c82ef; intercom-device-id-sh7mjuq3=88077d2f-4636-4e2e-8317-c2be2ca5e4dc; intercom-session-sh7mjuq3=',
-        'Origin': 'https://neworld.cloud',
-        'Referer': 'https://neworld.cloud/auth/login',
-        'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Content-Type': 'application/json',
+        'Origin': base_url,
+        'Referer': f'{base_url}/auth/login',
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Safari/537.36'
+        ),
         'X-Requested-With': 'XMLHttpRequest',
     }
 
-
-    data = {
+    payload = {
         'code': '',
-        'email': user,
+        'email': email,
         'passwd': password,
-        'fingerprint': '28a6103abe67ae368d0be9b612fc72db'
+        'remember_me': 'false',
+        'fingerprint': fingerprint,
     }
 
-    response = requests.post(url, headers=headers, data=data, verify=False)
-    # 将Set-Cookie头拆分为单个cookie条目
-    entries = response.headers.get('Set-Cookie')
-    keys_to_extract = ["uid", "key", "email", "expire_in", "ip", "ip_hash"]
+    try:
+        resp = session.post(url, json=payload, headers=headers, timeout=30, verify=False)
+        result = resp.json()
+    except Exception as e:
+        print(f"  请求异常: {e}")
+        return False
 
-    # 创建一个正则表达式模板，匹配每个目标键值对
-    cookie_pattern = r'(?P<key>' + '|'.join(keys_to_extract) + r')=([^;]+)'
+    if result.get('ret') == 1:
+        print(f"  ✅ 登录成功: {result.get('msg', '')}")
+        return True
+    else:
+        print(f"  ❌ 登录失败: {result.get('msg', '')}")
+        return False
 
-    # 使用正则表达式查找所有匹配的键值对
-    matches = re.findall(cookie_pattern, entries)
-    # 将匹配的结果转换成字典
-    cookie_dict = {key: value.strip() for key, value in matches}
 
-    return cookie_dict
+def do_checkin(session, base_url: str):
+    """执行签到请求"""
+    url = f"{base_url}/user/checkin"
 
-def process_account(username_env: str, password_env: str, add_cookies: dict):
-    # 从环境变量读取账号密码
-    user = os.environ[username_env]
-    password = os.environ[password_env]
+    headers = {
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Content-Length': '0',
+        'Origin': base_url,
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Safari/537.36'
+        ),
+        'X-Requested-With': 'XMLHttpRequest',
+    }
 
-    print("用户账号：" + mask_secret(user))
+    try:
+        resp = session.post(url, headers=headers, timeout=30, verify=False)
+        result = resp.json()
+        print(f"  ✅ 签到结果: {result.get('msg', '')}")
+    except Exception as e:
+        print(f"  ❌ 签到请求异常: {e}")
 
-    # 登录并补充 cookies
-    cookies = login(user, password)
-    cookies.update(add_cookies)
 
-    # 转成 check_in 需要的字符串格式
-    result = "; ".join([f"{key}={value}" for key, value in cookies.items()])
-    check_in(result)
+def process_account(base_url: str, username_env: str, password_env: str):
+    """处理单个账号：登录 → 签到"""
+    user = os.environ.get(username_env)
+    password = os.environ.get(password_env)
 
-add_cookies = {"intercom-device-id-sh7mjuq3": "88077d2f-4636-4e2e-8317-c2be2ca5e4dc", "intercom-id-sh7mjuq3": "b559e5c3-1f87-4f32-92a4-ea64a84c82ef", "_pk_id.1.86b2": "9c41cc0eac5d13af.1684203936."}
-process_account("USERNAME", "PASSWORD", add_cookies)
-process_account("USERNAME8344", "PASSWORD8344", add_cookies)
-process_account("USERNAME1325", "PASSWORD1325", add_cookies)
+    if not user or not password:
+        print(f"⚠️ 跳过 {username_env}/{password_env}：环境变量未配置")
+        return
 
+    print(f"用户账号：{mask_secret(user)}")
+
+    # 每个账号使用独立会话，避免 cookie 串扰
+    session = requests.Session()
+
+    # 第一步：访问登录页获取初始 cookies
+    try:
+        session.get(f"{base_url}/auth/login", timeout=15, verify=False)
+    except Exception as e:
+        print(f"  ❌ 无法访问登录页: {e}")
+        return
+
+    # 第二步：登录
+    if try_login(session, base_url, user, password):
+        # 第三步：签到
+        do_checkin(session, base_url)
+    else:
+        print("  ⏭️ 跳过签到")
+
+
+def main():
+    # ============================================================
+    # 基础域名配置
+    # 如果 neworld.cloud 无法使用，可改为 "https://neworld.tv"
+    # ============================================================
+    BASE_URL = "https://neworld.cloud"
+
+    print(f"🌐 签到服务: {BASE_URL}")
+    print(f"📅 {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 50)
+
+    # 处理多个账号
+    process_account(BASE_URL, "USERNAME", "PASSWORD")
+    process_account(BASE_URL, "USERNAME8344", "PASSWORD8344")
+    process_account(BASE_URL, "USERNAME1325", "PASSWORD1325")
+
+    print("=" * 50)
+    print("✅ 签到流程执行完毕")
+
+
+if __name__ == "__main__":
+    main()
