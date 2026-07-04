@@ -97,9 +97,12 @@ def do_checkin(session, base_url: str):
         ),
         'X-Requested-With': 'XMLHttpRequest',
     }
+    payload = {
+        "checkin_type": "traffic"
+    }
 
     try:
-        resp = session.post(url, headers=headers, timeout=30, verify=False)
+        resp = session.post(url, headers=headers, timeout=30, verify=False, json=payload)
         result = resp.json()
         print(f"  ✅ 签到结果: {result.get('msg', '')}")
     except Exception as e:
