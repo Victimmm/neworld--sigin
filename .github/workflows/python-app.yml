@@ -1,13 +1,10 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
+# 新界梯子每日自动签到
 name: 新界每日签到
 
 on:
-  workflow_dispatch: # 手动触发
-  schedule: # 计划任务触发
+  workflow_dispatch:
+  schedule:
     - cron: '7 0 * * *'
-    # cron表达式，时区是UTC时间，比我们早8小时，要用我们的时间减去8小时后填上去，如上所表示的是每天8:07自动签到
 
 permissions:
   contents: read
@@ -15,13 +12,10 @@ permissions:
 jobs:
   sign-in:
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    env:
+      TZ: Asia/Shanghai
     steps:
-    - name: 显示IP
-      run: sudo curl ifconfig.me
-
-    - name: 设置时区为东八区
-      run: sudo timedatectl set-timezone 'Asia/Shanghai'
-
     - uses: actions/checkout@v4
     - name: 设置 Python 3.10
       uses: actions/setup-python@v5
@@ -39,5 +33,6 @@ jobs:
          PASSWORD8344: ${{ secrets.PASSWORD8344 }}
          USERNAME1325: ${{ secrets.USERNAME1325 }}
          PASSWORD1325: ${{ secrets.PASSWORD1325 }}
+         CHECKIN_TYPE: "1"
       run: |
         python checkin.py
